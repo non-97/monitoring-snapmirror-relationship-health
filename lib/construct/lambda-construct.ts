@@ -127,9 +127,9 @@ export class LambdaConstruct extends Construct {
       logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH,
       loggingFormat: cdk.aws_lambda.LoggingFormat.JSON,
       applicationLogLevelV2: props.functionApplicationLogLevel,
+      systemLogLevelV2: props.functionSystemLogLevel,
       layers: [layer],
       environment: {
-        LOG_LEVEL: props.paramsAndSecretsLogLevel || "INFO",
         FSXN_DNS_NAME: props.fsxnDnsName,
         FSXN_USER_NAME: props.fsxnUserName,
         FSXN_USER_CREDENTIAL_SSM_PARAMETER_STORE_NAME:
