@@ -15,13 +15,12 @@ from netapp_ontap.resources import SnapmirrorRelationship
 from netapp_ontap.error import NetAppRestError
 from aws_xray_sdk.core import patch_all
 
-
 # 各種定義
 NAMESPACE = os.environ.get("NAMESPACE", "ONTAP/SnapMirror")
 PARAMETERS_SECRETS_EXTENSION_HTTP_PORT = os.environ.get(
     "PARAMETERS_SECRETS_EXTENSION_HTTP_PORT", "2773"
 )
-SSM_ENDPOINT = "http://localhost:" + PARAMETERS_SECRETS_EXTENSION_HTTP_PORT
+SSM_ENDPOINT = f"http://localhost:{PARAMETERS_SECRETS_EXTENSION_HTTP_PORT}"
 SSM_PATH = "/systemsmanager/parameters/get/"
 MAX_RETRIES = 4
 INITIAL_DELAY = 1
@@ -40,16 +39,14 @@ def setup_logger() -> logging.Logger:
 
 logger = setup_logger()
 
-
 # urllib にパッチ適用するには 二重パッチ適用が必要
 patch_all(double_patch=True)
-
 
 # CloudWatch クライアントの初期化
 try:
     cloudwatch = boto3.client("cloudwatch")
 except (ClientError, BotoCoreError) as e:
-    logger.error(f"Failed to initialize CloudWatch client: {e}")
+    logger.error("Failed to initialize CloudWatch client: %s", e)
     sys.exit(1)
 
 
@@ -59,7 +56,7 @@ def get_ssm_parameter(parameter_name: str) -> str:
     url = f"{SSM_ENDPOINT}{SSM_PATH}?name={encoded_name}&withDecryption=true"
     headers = {"X-Aws-Parameters-Secrets-Token": os.environ["AWS_SESSION_TOKEN"]}
 
-    logger.info(f"Requesting SSM parameter from: {url}")
+    logger.info("Requesting SSM parameter from: %s", url)
 
     # "not ready to serve traffic, please wait" とエラーになることがあるため、その場合はExponential Backoffしながらリトライ
     for attempt in range(MAX_RETRIES):
@@ -77,18 +74,21 @@ def get_ssm_parameter(parameter_name: str) -> str:
             ):
                 delay = min(INITIAL_DELAY * (2**attempt), MAX_DELAY)
                 logger.warning(
-                    f"Extension not ready. Retrying in {delay} seconds. Attempt {attempt + 1}/{MAX_RETRIES}"
+                    "Extension not ready. Retrying in %s seconds. Attempt %s/%s",
+                    delay,
+                    attempt + 1,
+                    MAX_RETRIES,
                 )
                 time.sleep(delay)
             else:
-                logger.error(f"HTTP Error {e.code}: {e.reason}")
-                logger.error(f"Error response body: {e.read().decode('utf-8')}")
+                logger.error("HTTP Error %s: %s", e.code, e.reason)
+                logger.error("Error response body: %s", e.read().decode("utf-8"))
                 raise
         except (urllib.error.URLError, TimeoutError) as e:
-            logger.error(f"Error fetching SSM parameter: {e}")
+            logger.error("Error fetching SSM parameter: %s", e)
             raise
         except (json.JSONDecodeError, KeyError) as e:
-            logger.error(f"Error parsing SSM parameter response: {e}")
+            logger.error("Error parsing SSM parameter response: %s", e)
             raise
 
     logger.error("Failed to retrieve SSM parameter after all retries.")
@@ -108,10 +108,10 @@ def get_ontap_connection() -> HostConnection:
             verify=False,
         )
     except KeyError as e:
-        logger.error(f"Missing environment variable: {e}")
+        logger.error("Missing environment variable: %s", e)
         raise
     except Exception as e:
-        logger.error(f"Error setting up ONTAP connection: {e}")
+        logger.error("Error setting up ONTAP connection: %s", e)
         raise
 
 
@@ -121,7 +121,7 @@ def get_snapmirror_relationships() -> List[SnapmirrorRelationship]:
     try:
         return SnapmirrorRelationship.get_collection(fields="*")
     except NetAppRestError as error:
-        logger.error(f"Error fetching SnapMirror relationships: {error}")
+        logger.error("Error fetching SnapMirror relationships: %s", error)
         raise
 
 
@@ -136,15 +136,17 @@ def put_metric_data(
                 {"MetricName": metric_name, "Value": value, "Dimensions": dimensions}
             ],
         )
-        logger.info(f"Successfully put metric data: {metric_name}")
+        logger.info("Successfully put metric data: %s", metric_name)
     except ClientError as e:
         error_code = e.response["Error"]["Code"]
         error_message = e.response["Error"]["Message"]
-        logger.error(f"ClientError putting metric data: {error_code} - {error_message}")
+        logger.error(
+            "ClientError putting metric data: %s - %s", error_code, error_message
+        )
     except BotoCoreError as e:
-        logger.error(f"BotoCoreError putting metric data: {e}")
+        logger.error("BotoCoreError putting metric data: %s", e)
     except Exception as e:
-        logger.error(f"Unexpected error putting metric data: {e}")
+        logger.error("Unexpected error putting metric data: %s", e)
 
 
 # 取得したSnapMirror relationshipの評価とレポーティング
@@ -160,7 +162,7 @@ def evaluate_and_report_snapmirror_health(
 
     for relationship in relationships:
         rel_dict = relationship.to_dict()
-        logger.debug(f"SnapMirror Relationship: {rel_dict}")
+        logger.debug("SnapMirror Relationship: %s", rel_dict)
 
         # SnapMirror relationship個別の状態のレポート
         report_individual_relationship_health(rel_dict)
@@ -229,11 +231,12 @@ def log_unhealthy_relationship(rel_dict: Dict[str, Any]) -> None:
     destination_path = rel_dict.get("destination", {}).get("path", "Unknown")
 
     logger.info(
-        f"Unhealthy SnapMirror Relationship detected "
-        f"Unhealthy Reason: {unhealthy_reason}, "
-        f"Relationship UUID: {relationship_uuid}, "
-        f"Source Path: {source_path}, "
-        f"Destination Path: {destination_path}"
+        "Unhealthy SnapMirror Relationship detected: "
+        "Unhealthy Reason: %s, Relationship UUID: %s, Source Path: %s, Destination Path: %s",
+        unhealthy_reason,
+        relationship_uuid,
+        source_path,
+        destination_path,
     )
 
 
@@ -243,7 +246,7 @@ def main():
         relationships = get_snapmirror_relationships()
         evaluate_and_report_snapmirror_health(relationships)
     except Exception as e:
-        logger.exception(f"An unexpected error occurred: {e}")
+        logger.exception("An unexpected error occurred: %s", e)
         sys.exit(1)
 
 
