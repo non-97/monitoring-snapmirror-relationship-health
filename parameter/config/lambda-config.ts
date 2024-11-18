@@ -12,6 +12,7 @@ export const lambdaConfig: LambdaProperty = {
   },
   functionSecurityGroupId: "sg-03730d9e2b49e7cbc",
   functionApplicationLogLevel: cdk.aws_lambda.ApplicationLogLevel.INFO,
+  functionSystemLogLevel: cdk.aws_lambda.SystemLogLevel.INFO,
   paramsAndSecretsLogLevel: cdk.aws_lambda.ParamsAndSecretsLogLevel.INFO,
   fsxnDnsName: "management.fs-0e64a4f5386f74c87.fsx.us-east-1.amazonaws.com",
   fsxnUserName: "fsxadmin-readonly",

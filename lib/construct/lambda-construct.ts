@@ -81,22 +81,31 @@ export class LambdaConstruct extends Construct {
       ],
     });
 
-    // Lambda Function
-    const lambdaFunction = new cdk.aws_lambda.Function(this, "Default", {
-      runtime: cdk.aws_lambda.Runtime.PYTHON_3_13,
-      handler: "index.lambda_handler",
+    // Lambda Layer
+    const layer = new cdk.aws_lambda.LayerVersion(this, "Layer", {
       code: cdk.aws_lambda.Code.fromAsset(
-        path.join(__dirname, "../src/lambda/"),
+        path.join(__dirname, "../src/lambda/layer"),
         {
           bundling: {
             image: cdk.aws_lambda.Runtime.PYTHON_3_13.bundlingImage,
             command: [
               "bash",
               "-c",
-              "pip install -r requirements.txt -t /asset-output && cp -au . /asset-output",
+              "pip install -r requirements.txt -t /asset-output/python && cp -au . /asset-output/python",
             ],
           },
         }
+      ),
+      compatibleArchitectures: [cdk.aws_lambda.Architecture.ARM_64],
+      compatibleRuntimes: [cdk.aws_lambda.Runtime.PYTHON_3_13],
+    });
+
+    // Lambda Function
+    const lambdaFunction = new cdk.aws_lambda.Function(this, "Default", {
+      runtime: cdk.aws_lambda.Runtime.PYTHON_3_13,
+      handler: "index.lambda_handler",
+      code: cdk.aws_lambda.Code.fromAsset(
+        path.join(__dirname, "../src/lambda/handler")
       ),
       role,
       vpc,
@@ -118,8 +127,9 @@ export class LambdaConstruct extends Construct {
       logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH,
       loggingFormat: cdk.aws_lambda.LoggingFormat.JSON,
       applicationLogLevelV2: props.functionApplicationLogLevel,
+      systemLogLevelV2: props.functionSystemLogLevel,
+      layers: [layer],
       environment: {
-        LOG_LEVEL: props.paramsAndSecretsLogLevel || "INFO",
         FSXN_DNS_NAME: props.fsxnDnsName,
         FSXN_USER_NAME: props.fsxnUserName,
         FSXN_USER_CREDENTIAL_SSM_PARAMETER_STORE_NAME:

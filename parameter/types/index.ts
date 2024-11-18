@@ -12,6 +12,7 @@ export interface LambdaProperty {
   functionSubnetSelection: cdk.aws_ec2.SubnetSelection;
   functionSecurityGroupId?: string;
   functionApplicationLogLevel?: cdk.aws_lambda.ApplicationLogLevel;
+  functionSystemLogLevel?: cdk.aws_lambda.SystemLogLevel;
   paramsAndSecretsLogLevel?: cdk.aws_lambda.ParamsAndSecretsLogLevel;
   fsxnDnsName: string;
   fsxnUserName: string;
