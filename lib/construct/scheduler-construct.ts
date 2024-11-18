@@ -26,9 +26,13 @@ export class SchedulerConstruct extends Construct {
       ],
     });
 
+    // EventBridge Scheduler Group
     const scheduleGroup = new cdk.aws_scheduler.CfnScheduleGroup(
       this,
-      "ScheduleGroup"
+      "ScheduleGroup",
+      {
+        name: "MonitoringSnapmirrorRelationshipHealthScheduleGroup",
+      }
     );
 
     // EventBridge Scheduler
@@ -37,6 +41,7 @@ export class SchedulerConstruct extends Construct {
         mode: "OFF",
       },
       groupName: scheduleGroup.name,
+      name: "MonitoringSnapmirrorRelationshipHealthSchedule",
       scheduleExpression: props.scheduleExpression,
       target: {
         arn: props.targetFunction.functionArn,
