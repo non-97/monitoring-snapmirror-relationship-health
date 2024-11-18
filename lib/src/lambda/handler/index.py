@@ -4,16 +4,18 @@ import json
 import urllib.parse
 import urllib.request
 import urllib.error
-import boto3
 import sys
 import time
+import math
 from typing import Dict, List, Any
 from collections import defaultdict
+import boto3
 from botocore.exceptions import ClientError, BotoCoreError
 from netapp_ontap import config, HostConnection
 from netapp_ontap.resources import SnapmirrorRelationship
 from netapp_ontap.error import NetAppRestError
 from aws_xray_sdk.core import patch_all
+
 
 # 各種定義
 NAMESPACE = os.environ.get("NAMESPACE", "ONTAP/SnapMirror")
@@ -25,6 +27,7 @@ SSM_PATH = "/systemsmanager/parameters/get/"
 MAX_RETRIES = 4
 INITIAL_DELAY = 1
 MAX_DELAY = 4
+MAX_METRICS_PER_REQUEST = 150
 
 
 # Loggerの設定
@@ -39,8 +42,10 @@ def setup_logger() -> logging.Logger:
 
 logger = setup_logger()
 
+
 # urllib にパッチ適用するには 二重パッチ適用が必要
 patch_all(double_patch=True)
+
 
 # CloudWatch クライアントの初期化
 try:
@@ -126,27 +131,95 @@ def get_snapmirror_relationships() -> List[SnapmirrorRelationship]:
 
 
 # CloudWatchのメトリクスデータのPUT
-def put_metric_data(
-    metric_name: str, value: float, dimensions: List[Dict[str, str]]
+def batch_put_metric_data(
+    namespace: str, metric_data_list: List[Dict[str, Any]]
 ) -> None:
-    try:
-        cloudwatch.put_metric_data(
-            Namespace=NAMESPACE,
-            MetricData=[
-                {"MetricName": metric_name, "Value": value, "Dimensions": dimensions}
+    total_metrics = len(metric_data_list)
+    batches = math.ceil(total_metrics / MAX_METRICS_PER_REQUEST)
+
+    for i in range(batches):
+        start_idx = i * MAX_METRICS_PER_REQUEST
+        end_idx = min((i + 1) * MAX_METRICS_PER_REQUEST, total_metrics)
+        metric_data = metric_data_list[start_idx:end_idx]
+
+        try:
+            cloudwatch.put_metric_data(Namespace=namespace, MetricData=metric_data)
+            logger.info(
+                "Successfully put %d metric data points (batch %d of %d)",
+                len(metric_data),
+                i + 1,
+                batches,
+            )
+        except ClientError as e:
+            error_code = e.response["Error"]["Code"]
+            error_message = e.response["Error"]["Message"]
+            logger.error(
+                "ClientError putting metric data (batch %d of %d): %s - %s",
+                i + 1,
+                batches,
+                error_code,
+                error_message,
+            )
+        except BotoCoreError as e:
+            logger.error(
+                "BotoCoreError putting metric data (batch %d of %d): %s",
+                i + 1,
+                batches,
+                e,
+            )
+        except Exception as e:
+            logger.error(
+                "Unexpected error putting metric data (batch %d of %d): %s",
+                i + 1,
+                batches,
+                e,
+            )
+
+
+# SnapMirror relationshipの個別のHealthをメトリクスとして整理
+def process_individual_relationship_metrics(
+    relationship: Dict[str, Any]
+) -> Dict[str, Any]:
+    # HealthがTrueの場合は1
+    # HealthがFalseの場合は0
+    health_value = 1 if relationship.get("healthy", False) else 0
+    return {
+        "MetricName": "SnapMirrorRelationshipHealth",
+        "Dimensions": [
+            {
+                "Name": "SourcePath",
+                "Value": relationship.get("source", {}).get("path", "Unknown"),
+            },
+            {
+                "Name": "DestinationPath",
+                "Value": relationship.get("destination", {}).get("path", "Unknown"),
+            },
+            {"Name": "RelationshipUUID", "Value": relationship.get("uuid", "Unknown")},
+        ],
+        "Value": health_value,
+    }
+
+
+# Destination SVM 単位のHealthをメトリクスとして整理
+def process_svm_level_metrics(
+    svm_health: Dict[str, Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    # Destination SVM 単位で、全てのSnapMirror relationshipのHealthがTrueの場合は1
+    # Destination SVM 単位で、いずれかのSnapMirror relationshipのHealthがFalseの場合は0
+    return [
+        {
+            "MetricName": "SnapMirrorRelationshipHealth",
+            "Dimensions": [
+                {
+                    "Name": "DestinationStorageVirtualMachineName",
+                    "Value": svm_info["name"],
+                },
+                {"Name": "DestinationStorageVirtualMachineUUID", "Value": svm_uuid},
             ],
-        )
-        logger.info("Successfully put metric data: %s", metric_name)
-    except ClientError as e:
-        error_code = e.response["Error"]["Code"]
-        error_message = e.response["Error"]["Message"]
-        logger.error(
-            "ClientError putting metric data: %s - %s", error_code, error_message
-        )
-    except BotoCoreError as e:
-        logger.error("BotoCoreError putting metric data: %s", e)
-    except Exception as e:
-        logger.error("Unexpected error putting metric data: %s", e)
+            "Value": 1 if svm_info["healthy"] else 0,
+        }
+        for svm_uuid, svm_info in svm_health.items()
+    ]
 
 
 # 取得したSnapMirror relationshipの評価とレポーティング
@@ -157,6 +230,8 @@ def evaluate_and_report_snapmirror_health(
         logger.info("No SnapMirror relationships found.")
         return
 
+    metric_data_list = []
+
     # Destination の SVM 単位の SnapMirror relationship の Health を確認するための変数を宣言
     svm_health = defaultdict(lambda: {"healthy": True, "name": "", "uuid": ""})
 
@@ -164,33 +239,18 @@ def evaluate_and_report_snapmirror_health(
         rel_dict = relationship.to_dict()
         logger.debug("SnapMirror Relationship: %s", rel_dict)
 
-        # SnapMirror relationship個別の状態のレポート
-        report_individual_relationship_health(rel_dict)
+        # 個別のSnapMirror relationshipのメトリクス
+        metric_data_list.append(process_individual_relationship_metrics(rel_dict))
 
         # Destination SVM単位SnapMirror relationshipの状態の評価
         update_svm_health(rel_dict, svm_health)
 
-    # Destination SVM単位SnapMirror relationshipの状態のレポート
-    report_svm_level_health(svm_health)
+    # Destination SVM単位SnapMirror relationshipのメトリクス
+    metric_data_list.extend(process_svm_level_metrics(svm_health))
 
-
-# SnapMirror relationshipの個別のHealthをメトリクスとしてPUT
-def report_individual_relationship_health(rel_dict: Dict[str, Any]) -> None:
-    # HealthがTrueの場合は1
-    # HealthがFalseの場合は0
-    health_value = 1 if rel_dict.get("healthy", False) else 0
-    dimensions = [
-        {
-            "Name": "SourcePath",
-            "Value": rel_dict.get("source", {}).get("path", "Unknown"),
-        },
-        {
-            "Name": "DestinationPath",
-            "Value": rel_dict.get("destination", {}).get("path", "Unknown"),
-        },
-        {"Name": "RelationshipUUID", "Value": rel_dict.get("uuid", "Unknown")},
-    ]
-    put_metric_data("SnapMirrorRelationshipHealth", health_value, dimensions)
+    # 一度のAPI呼び出しで全てのメトリクスを送信
+    if metric_data_list:
+        batch_put_metric_data(NAMESPACE, metric_data_list)
 
 
 # Destination SVM単位SnapMirror relationshipの状態の評価
@@ -210,19 +270,6 @@ def update_svm_health(
     svm_health[destination_svm_uuid]["uuid"] = destination_svm_uuid
 
 
-# Destination SVM 単位でメトリクスをPUT
-def report_svm_level_health(svm_health: Dict[str, Dict[str, Any]]) -> None:
-    # Destination SVM 単位で、全てのSnapMirror relationshipのHealthがTrueの場合は1
-    # Destination SVM 単位で、いずれかのSnapMirror relationshipのHealthがFalseの場合は0
-    for svm_uuid, svm_info in svm_health.items():
-        health_value = 1 if svm_info["healthy"] else 0
-        dimensions = [
-            {"Name": "DestinationStorageVirtualMachineName", "Value": svm_info["name"]},
-            {"Name": "DestinationStorageVirtualMachineUUID", "Value": svm_uuid},
-        ]
-        put_metric_data("SnapMirrorRelationshipHealth", health_value, dimensions)
-
-
 # Unhealthy な SnapMirror relationshipの情報をロギング
 def log_unhealthy_relationship(rel_dict: Dict[str, Any]) -> None:
     unhealthy_reason = rel_dict.get("unhealthy_reason", "Unknown reason")
@@ -240,7 +287,7 @@ def log_unhealthy_relationship(rel_dict: Dict[str, Any]) -> None:
     )
 
 
-def main():
+def main() -> None:
     try:
         config.CONNECTION = get_ontap_connection()
         relationships = get_snapmirror_relationships()
@@ -250,5 +297,5 @@ def main():
         sys.exit(1)
 
 
-def lambda_handler(event, context):
+def lambda_handler(event, context) -> None:
     main()
