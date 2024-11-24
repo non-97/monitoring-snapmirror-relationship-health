@@ -120,17 +120,8 @@ export class LambdaConstruct extends Construct {
       vpc,
       vpcSubnets: vpc.selectSubnets(props.functionSubnetSelection),
       securityGroups: [securityGroup],
-      paramsAndSecrets: cdk.aws_lambda.ParamsAndSecretsLayerVersion.fromVersion(
-        cdk.aws_lambda.ParamsAndSecretsVersions.V1_0_103,
-        {
-          cacheEnabled: true,
-          cacheSize: 10,
-          parameterStoreTimeout: cdk.Duration.seconds(10),
-          parameterStoreTtl: cdk.Duration.minutes(5),
-        }
-      ),
       architecture: cdk.aws_lambda.Architecture.ARM_64,
-      timeout: cdk.Duration.seconds(30),
+      timeout: cdk.Duration.seconds(20),
       tracing: cdk.aws_lambda.Tracing.ACTIVE,
       logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH,
       loggingFormat: cdk.aws_lambda.LoggingFormat.JSON,
@@ -140,6 +131,7 @@ export class LambdaConstruct extends Construct {
       environment: {
         POWERTOOLS_LOG_LEVEL: props.powertoolsLogLevel || "INFO",
         POWERTOOLS_SERVICE_NAME: "monitoring-snapmirror-relationship-health",
+        POWERTOOLS_PARAMETERS_MAX_AGE: "500",
         FSXN_DNS_NAME: props.fsxnDnsName,
         FSXN_USER_NAME: props.fsxnUserName,
         FSXN_USER_CREDENTIAL_SSM_PARAMETER_STORE_NAME:

@@ -1,10 +1,5 @@
 import os
-import json
-import urllib.parse
-import urllib.request
-import urllib.error
 import sys
-import time
 import math
 from typing import Dict, List, Any
 from collections import defaultdict
@@ -14,18 +9,12 @@ from netapp_ontap import config, HostConnection
 from netapp_ontap.resources import SnapmirrorRelationship
 from netapp_ontap.error import NetAppRestError
 from aws_lambda_powertools import Logger, Tracer
+from aws_lambda_powertools.utilities import parameters
+from aws_lambda_powertools.utilities.typing import LambdaContext
 
 
 # 各種定義
 NAMESPACE = os.environ.get("NAMESPACE", "ONTAP/SnapMirror")
-PARAMETERS_SECRETS_EXTENSION_HTTP_PORT = os.environ.get(
-    "PARAMETERS_SECRETS_EXTENSION_HTTP_PORT", "2773"
-)
-SSM_ENDPOINT = f"http://localhost:{PARAMETERS_SECRETS_EXTENSION_HTTP_PORT}"
-SSM_PATH = "/systemsmanager/parameters/get/"
-MAX_RETRIES = 4
-INITIAL_DELAY = 1
-MAX_DELAY = 4
 MAX_METRICS_PER_REQUEST = 150
 
 
@@ -43,57 +32,14 @@ except (ClientError, BotoCoreError) as e:
     sys.exit(1)
 
 
-# AWS Parameter and Secrets Lambda extension で SSM Parameter StoreのSecure Stringを取得
-@tracer.capture_method
-def get_ssm_parameter(parameter_name: str) -> str:
-    encoded_name = urllib.parse.quote(parameter_name)
-    url = f"{SSM_ENDPOINT}{SSM_PATH}?name={encoded_name}&withDecryption=true"
-    headers = {"X-Aws-Parameters-Secrets-Token": os.environ["AWS_SESSION_TOKEN"]}
-
-    logger.info("Requesting SSM parameter from: %s", url)
-
-    # "not ready to serve traffic, please wait" とエラーになることがあるため、その場合はExponential Backoffしながらリトライ
-    for attempt in range(MAX_RETRIES):
-        try:
-            req = urllib.request.Request(url, headers=headers)
-            with urllib.request.urlopen(req) as response:
-                response_data = response.read().decode("utf-8")
-            parameter = json.loads(response_data)
-            return parameter["Parameter"]["Value"]
-        except urllib.error.HTTPError as e:
-            if (
-                e.code == 400
-                and "not ready to serve traffic, please wait"
-                in e.read().decode("utf-8")
-            ):
-                delay = min(INITIAL_DELAY * (2**attempt), MAX_DELAY)
-                logger.warning(
-                    "Extension not ready. Retrying in %s seconds. Attempt %s/%s",
-                    delay,
-                    attempt + 1,
-                    MAX_RETRIES,
-                )
-                time.sleep(delay)
-            else:
-                logger.error("HTTP Error %s: %s", e.code, e.reason)
-                logger.error("Error response body: %s", e.read().decode("utf-8"))
-                raise
-        except (urllib.error.URLError, TimeoutError) as e:
-            logger.error("Error fetching SSM parameter: %s", e)
-            raise
-        except (json.JSONDecodeError, KeyError) as e:
-            logger.error("Error parsing SSM parameter response: %s", e)
-            raise
-
-    logger.error("Failed to retrieve SSM parameter after all retries.")
-    raise Exception("Max retries reached for SSM parameter retrieval")
-
-
 # FSxNへの接続
+@tracer.capture_method
 def get_ontap_connection() -> HostConnection:
     try:
-        password = get_ssm_parameter(
-            os.environ["FSXN_USER_CREDENTIAL_SSM_PARAMETER_STORE_NAME"]
+        password = parameters.get_parameter(
+            os.environ["FSXN_USER_CREDENTIAL_SSM_PARAMETER_STORE_NAME"],
+            decrypt=True,
+            max_age=300,
         )
         return HostConnection(
             os.environ["FSXN_DNS_NAME"],
@@ -297,5 +243,5 @@ def main() -> None:
 
 @logger.inject_lambda_context()
 @tracer.capture_lambda_handler
-def lambda_handler(event, context) -> None:
+def lambda_handler(event: dict, context: LambdaContext) -> None:
     main()
