@@ -13,7 +13,8 @@ from botocore.exceptions import ClientError, BotoCoreError
 from netapp_ontap import config, HostConnection
 from netapp_ontap.resources import SnapmirrorRelationship
 from netapp_ontap.error import NetAppRestError
-from aws_lambda_powertools import Logger
+from aws_lambda_powertools import Logger, Tracer
+
 
 # 各種定義
 NAMESPACE = os.environ.get("NAMESPACE", "ONTAP/SnapMirror")
@@ -31,6 +32,8 @@ MAX_METRICS_PER_REQUEST = 150
 # Loggerの設定
 logger = Logger()
 
+# Tracerの設定
+tracer = Tracer()
 
 # CloudWatch クライアントの初期化
 try:
@@ -41,6 +44,7 @@ except (ClientError, BotoCoreError) as e:
 
 
 # AWS Parameter and Secrets Lambda extension で SSM Parameter StoreのSecure Stringを取得
+@tracer.capture_method
 def get_ssm_parameter(parameter_name: str) -> str:
     encoded_name = urllib.parse.quote(parameter_name)
     url = f"{SSM_ENDPOINT}{SSM_PATH}?name={encoded_name}&withDecryption=true"
@@ -106,6 +110,7 @@ def get_ontap_connection() -> HostConnection:
 
 
 # SnapMirror relationshipの取得
+# @tracer.capture_method
 def get_snapmirror_relationships() -> List[SnapmirrorRelationship]:
     # SnapMirror relationshipの取得
     try:
@@ -116,6 +121,7 @@ def get_snapmirror_relationships() -> List[SnapmirrorRelationship]:
 
 
 # CloudWatchのメトリクスデータのPUT
+@tracer.capture_method
 def batch_put_metric_data(
     namespace: str, metric_data_list: List[Dict[str, Any]]
 ) -> None:
@@ -208,6 +214,7 @@ def process_svm_level_metrics(
 
 
 # 取得したSnapMirror relationshipの評価とレポーティング
+@tracer.capture_method
 def evaluate_and_report_snapmirror_health(
     relationships: List[SnapmirrorRelationship],
 ) -> None:
@@ -289,5 +296,6 @@ def main() -> None:
 
 
 @logger.inject_lambda_context()
+@tracer.capture_lambda_handler
 def lambda_handler(event, context) -> None:
     main()
