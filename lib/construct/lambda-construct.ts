@@ -100,6 +100,15 @@ export class LambdaConstruct extends Construct {
       compatibleRuntimes: [cdk.aws_lambda.Runtime.PYTHON_3_13],
     });
 
+    const lambdaPowertoolsLayer =
+      cdk.aws_lambda.LayerVersion.fromLayerVersionArn(
+        this,
+        "lambdaPowertoolsLayer",
+        `arn:aws:lambda:${
+          cdk.Stack.of(this).region
+        }:017000801446:layer:AWSLambdaPowertoolsPythonV3-python313-arm64:4`
+      );
+
     // Lambda Function
     const lambdaFunction = new cdk.aws_lambda.Function(this, "Default", {
       runtime: cdk.aws_lambda.Runtime.PYTHON_3_13,
@@ -116,7 +125,6 @@ export class LambdaConstruct extends Construct {
         {
           cacheEnabled: true,
           cacheSize: 10,
-          logLevel: props.paramsAndSecretsLogLevel,
           parameterStoreTimeout: cdk.Duration.seconds(10),
           parameterStoreTtl: cdk.Duration.minutes(5),
         }
@@ -128,8 +136,10 @@ export class LambdaConstruct extends Construct {
       loggingFormat: cdk.aws_lambda.LoggingFormat.JSON,
       applicationLogLevelV2: props.functionApplicationLogLevel,
       systemLogLevelV2: props.functionSystemLogLevel,
-      layers: [layer],
+      layers: [layer, lambdaPowertoolsLayer],
       environment: {
+        POWERTOOLS_LOG_LEVEL: props.powertoolsLogLevel || "INFO",
+        POWERTOOLS_SERVICE_NAME: "monitoring-snapmirror-relationship-health",
         FSXN_DNS_NAME: props.fsxnDnsName,
         FSXN_USER_NAME: props.fsxnUserName,
         FSXN_USER_CREDENTIAL_SSM_PARAMETER_STORE_NAME:

@@ -1,5 +1,4 @@
 import os
-import logging
 import json
 import urllib.parse
 import urllib.request
@@ -14,8 +13,7 @@ from botocore.exceptions import ClientError, BotoCoreError
 from netapp_ontap import config, HostConnection
 from netapp_ontap.resources import SnapmirrorRelationship
 from netapp_ontap.error import NetAppRestError
-from aws_xray_sdk.core import patch_all
-
+from aws_lambda_powertools import Logger
 
 # 各種定義
 NAMESPACE = os.environ.get("NAMESPACE", "ONTAP/SnapMirror")
@@ -31,20 +29,7 @@ MAX_METRICS_PER_REQUEST = 150
 
 
 # Loggerの設定
-def setup_logger() -> logging.Logger:
-    log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
-    logging.basicConfig(
-        level=getattr(logging, log_level),
-        format="%(asctime)s [%(levelname)s] %(name)s %(message)s",
-    )
-    return logging.getLogger(__name__)
-
-
-logger = setup_logger()
-
-
-# urllib にパッチ適用するには 二重パッチ適用が必要
-patch_all(double_patch=True)
+logger = Logger()
 
 
 # CloudWatch クライアントの初期化
@@ -237,7 +222,9 @@ def evaluate_and_report_snapmirror_health(
 
     for relationship in relationships:
         rel_dict = relationship.to_dict()
-        logger.debug("SnapMirror Relationship: %s", rel_dict)
+        logger.debug(
+            "SnapMirror Relationship detected", extra={"relationship": rel_dict}
+        )
 
         # 個別のSnapMirror relationshipのメトリクス
         metric_data_list.append(process_individual_relationship_metrics(rel_dict))
@@ -272,19 +259,23 @@ def update_svm_health(
 
 # Unhealthy な SnapMirror relationshipの情報をロギング
 def log_unhealthy_relationship(rel_dict: Dict[str, Any]) -> None:
+    state = rel_dict.get("state", "Unknown reason")
     unhealthy_reason = rel_dict.get("unhealthy_reason", "Unknown reason")
     relationship_uuid = rel_dict.get("uuid", "Unknown")
     source_path = rel_dict.get("source", {}).get("path", "Unknown")
     destination_path = rel_dict.get("destination", {}).get("path", "Unknown")
 
-    logger.info(
-        "Unhealthy SnapMirror Relationship detected: "
-        "Unhealthy Reason: %s, Relationship UUID: %s, Source Path: %s, Destination Path: %s",
-        unhealthy_reason,
-        relationship_uuid,
-        source_path,
-        destination_path,
-    )
+    adding_key = {
+        "relationship": {
+            "state": state,
+            "unhealthy_reason": unhealthy_reason,
+            "uuid": relationship_uuid,
+            "source_path": source_path,
+            "destination_path": destination_path,
+        }
+    }
+
+    logger.info("Unhealthy SnapMirror Relationship detected", extra=adding_key)
 
 
 def main() -> None:
@@ -297,5 +288,6 @@ def main() -> None:
         sys.exit(1)
 
 
+@logger.inject_lambda_context()
 def lambda_handler(event, context) -> None:
     main()

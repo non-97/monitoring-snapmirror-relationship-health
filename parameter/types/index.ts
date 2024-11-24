@@ -13,7 +13,7 @@ export interface LambdaProperty {
   functionSecurityGroupId?: string;
   functionApplicationLogLevel?: cdk.aws_lambda.ApplicationLogLevel;
   functionSystemLogLevel?: cdk.aws_lambda.SystemLogLevel;
-  paramsAndSecretsLogLevel?: cdk.aws_lambda.ParamsAndSecretsLogLevel;
+  powertoolsLogLevel?: "DEBUG" | "INFO" | "WARNING" | "ERROR" | "CRITICAL";
   fsxnDnsName: string;
   fsxnUserName: string;
   fsxnUserCredentialSsmParameterStoreName: string;
