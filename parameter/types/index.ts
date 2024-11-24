@@ -4,7 +4,6 @@ export interface VpcEndpointProperty {
   vpcId: string;
   vpcEndpointSubnetSelection: cdk.aws_ec2.SubnetSelection;
   shouldCreateSsmVpcEndpoint?: boolean;
-  shouldCreateCloudWatchVpcEndpoint?: boolean;
 }
 
 export interface LambdaProperty {

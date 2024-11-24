@@ -11,5 +11,4 @@ export const vpcEndpointConfig: VpcEndpointProperty = {
     ],
   },
   shouldCreateSsmVpcEndpoint: true,
-  shouldCreateCloudWatchVpcEndpoint: true,
 };

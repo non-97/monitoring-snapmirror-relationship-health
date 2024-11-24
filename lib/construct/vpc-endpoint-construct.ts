@@ -20,14 +20,5 @@ export class VpcEndpointConstruct extends Construct {
         subnets: vpc.selectSubnets(props.vpcEndpointSubnetSelection),
       });
     }
-
-    // CloudWatch
-    if (props.shouldCreateCloudWatchVpcEndpoint) {
-      vpc.addInterfaceEndpoint("CloudWatchEndpoint", {
-        service:
-          cdk.aws_ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_MONITORING,
-        subnets: vpc.selectSubnets(props.vpcEndpointSubnetSelection),
-      });
-    }
   }
 }

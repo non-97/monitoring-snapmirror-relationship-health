@@ -1,6 +1,5 @@
 import os
 import sys
-import math
 from typing import Dict, List, Any
 from collections import defaultdict
 import boto3
@@ -8,21 +7,17 @@ from botocore.exceptions import ClientError, BotoCoreError
 from netapp_ontap import config, HostConnection
 from netapp_ontap.resources import SnapmirrorRelationship
 from netapp_ontap.error import NetAppRestError
-from aws_lambda_powertools import Logger, Tracer
+from aws_lambda_powertools import Logger, Tracer, Metrics, single_metric
+from aws_lambda_powertools.metrics import MetricUnit
 from aws_lambda_powertools.utilities import parameters
+from aws_lambda_powertools.utilities.parameters.exceptions import GetParameterError
 from aws_lambda_powertools.utilities.typing import LambdaContext
 
 
-# 各種定義
-NAMESPACE = os.environ.get("NAMESPACE", "ONTAP/SnapMirror")
-MAX_METRICS_PER_REQUEST = 150
-
-
-# Loggerの設定
+# Lambda Powertoolsの設定
 logger = Logger()
-
-# Tracerの設定
 tracer = Tracer()
+metrics = Metrics()
 
 # CloudWatch クライアントの初期化
 try:
@@ -47,6 +42,11 @@ def get_ontap_connection() -> HostConnection:
             password=password,
             verify=False,
         )
+    except GetParameterError as e:
+        logger.error(
+            "When a provider raises an exception on parameter retrieval: %s", e
+        )
+        raise
     except KeyError as e:
         logger.error("Missing environment variable: %s", e)
         raise
@@ -56,9 +56,7 @@ def get_ontap_connection() -> HostConnection:
 
 
 # SnapMirror relationshipの取得
-# @tracer.capture_method
 def get_snapmirror_relationships() -> List[SnapmirrorRelationship]:
-    # SnapMirror relationshipの取得
     try:
         return SnapmirrorRelationship.get_collection(fields="*")
     except NetAppRestError as error:
@@ -66,97 +64,40 @@ def get_snapmirror_relationships() -> List[SnapmirrorRelationship]:
         raise
 
 
-# CloudWatchのメトリクスデータのPUT
-@tracer.capture_method
-def batch_put_metric_data(
-    namespace: str, metric_data_list: List[Dict[str, Any]]
-) -> None:
-    total_metrics = len(metric_data_list)
-    batches = math.ceil(total_metrics / MAX_METRICS_PER_REQUEST)
-
-    for i in range(batches):
-        start_idx = i * MAX_METRICS_PER_REQUEST
-        end_idx = min((i + 1) * MAX_METRICS_PER_REQUEST, total_metrics)
-        metric_data = metric_data_list[start_idx:end_idx]
-
-        try:
-            cloudwatch.put_metric_data(Namespace=namespace, MetricData=metric_data)
-            logger.info(
-                "Successfully put %d metric data points (batch %d of %d)",
-                len(metric_data),
-                i + 1,
-                batches,
-            )
-        except ClientError as e:
-            error_code = e.response["Error"]["Code"]
-            error_message = e.response["Error"]["Message"]
-            logger.error(
-                "ClientError putting metric data (batch %d of %d): %s - %s",
-                i + 1,
-                batches,
-                error_code,
-                error_message,
-            )
-        except BotoCoreError as e:
-            logger.error(
-                "BotoCoreError putting metric data (batch %d of %d): %s",
-                i + 1,
-                batches,
-                e,
-            )
-        except Exception as e:
-            logger.error(
-                "Unexpected error putting metric data (batch %d of %d): %s",
-                i + 1,
-                batches,
-                e,
-            )
-
-
 # SnapMirror relationshipの個別のHealthをメトリクスとして整理
-def process_individual_relationship_metrics(
-    relationship: Dict[str, Any]
-) -> Dict[str, Any]:
+def process_individual_relationship_metrics(relationship: Dict[str, Any]) -> None:
     # HealthがTrueの場合は1
     # HealthがFalseの場合は0
     health_value = 1 if relationship.get("healthy", False) else 0
-    return {
-        "MetricName": "SnapMirrorRelationshipHealth",
-        "Dimensions": [
-            {
-                "Name": "SourcePath",
-                "Value": relationship.get("source", {}).get("path", "Unknown"),
-            },
-            {
-                "Name": "DestinationPath",
-                "Value": relationship.get("destination", {}).get("path", "Unknown"),
-            },
-            {"Name": "RelationshipUUID", "Value": relationship.get("uuid", "Unknown")},
-        ],
-        "Value": health_value,
-    }
+    with single_metric(
+        name="SnapMirrorRelationshipHealth",
+        unit=MetricUnit.Count,
+        value=health_value,
+    ) as metric:
+        metric.add_dimension(
+            "SourcePath", relationship.get("source", {}).get("path", "Unknown")
+        )
+        metric.add_dimension(
+            "DestinationPath",
+            relationship.get("destination", {}).get("path", "Unknown"),
+        )
+        metric.add_dimension("RelationshipUUID", relationship.get("uuid", "Unknown"))
 
 
 # Destination SVM 単位のHealthをメトリクスとして整理
-def process_svm_level_metrics(
-    svm_health: Dict[str, Dict[str, Any]]
-) -> List[Dict[str, Any]]:
+def process_svm_level_metrics(svm_health: Dict[str, Dict[str, Any]]) -> None:
     # Destination SVM 単位で、全てのSnapMirror relationshipのHealthがTrueの場合は1
     # Destination SVM 単位で、いずれかのSnapMirror relationshipのHealthがFalseの場合は0
-    return [
-        {
-            "MetricName": "SnapMirrorRelationshipHealth",
-            "Dimensions": [
-                {
-                    "Name": "DestinationStorageVirtualMachineName",
-                    "Value": svm_info["name"],
-                },
-                {"Name": "DestinationStorageVirtualMachineUUID", "Value": svm_uuid},
-            ],
-            "Value": 1 if svm_info["healthy"] else 0,
-        }
-        for svm_uuid, svm_info in svm_health.items()
-    ]
+    for svm_uuid, svm_info in svm_health.items():
+        with single_metric(
+            name="SnapMirrorRelationshipHealth",
+            unit=MetricUnit.Count,
+            value=1 if svm_info["healthy"] else 0,
+        ) as metric:
+            metric.add_dimension(
+                "DestinationStorageVirtualMachineName", svm_info["name"]
+            )
+            metric.add_dimension("DestinationStorageVirtualMachineUUID", svm_uuid)
 
 
 # 取得したSnapMirror relationshipの評価とレポーティング
@@ -168,8 +109,6 @@ def evaluate_and_report_snapmirror_health(
         logger.info("No SnapMirror relationships found.")
         return
 
-    metric_data_list = []
-
     # Destination の SVM 単位の SnapMirror relationship の Health を確認するための変数を宣言
     svm_health = defaultdict(lambda: {"healthy": True, "name": "", "uuid": ""})
 
@@ -180,17 +119,13 @@ def evaluate_and_report_snapmirror_health(
         )
 
         # 個別のSnapMirror relationshipのメトリクス
-        metric_data_list.append(process_individual_relationship_metrics(rel_dict))
+        process_individual_relationship_metrics(rel_dict)
 
         # Destination SVM単位SnapMirror relationshipの状態の評価
         update_svm_health(rel_dict, svm_health)
 
     # Destination SVM単位SnapMirror relationshipのメトリクス
-    metric_data_list.extend(process_svm_level_metrics(svm_health))
-
-    # 一度のAPI呼び出しで全てのメトリクスを送信
-    if metric_data_list:
-        batch_put_metric_data(NAMESPACE, metric_data_list)
+    process_svm_level_metrics(svm_health)
 
 
 # Destination SVM単位SnapMirror relationshipの状態の評価
@@ -241,6 +176,7 @@ def main() -> None:
         sys.exit(1)
 
 
+@metrics.log_metrics()
 @logger.inject_lambda_context()
 @tracer.capture_lambda_handler
 def lambda_handler(event: dict, context: LambdaContext) -> None:
