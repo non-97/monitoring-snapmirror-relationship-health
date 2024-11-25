@@ -2,8 +2,6 @@ import os
 import sys
 from typing import Dict, List, Any
 from collections import defaultdict
-import boto3
-from botocore.exceptions import ClientError, BotoCoreError
 from netapp_ontap import config, HostConnection
 from netapp_ontap.resources import SnapmirrorRelationship
 from netapp_ontap.error import NetAppRestError
@@ -18,13 +16,6 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 logger = Logger()
 tracer = Tracer()
 metrics = Metrics()
-
-# CloudWatch クライアントの初期化
-try:
-    cloudwatch = boto3.client("cloudwatch")
-except (ClientError, BotoCoreError) as e:
-    logger.error("Failed to initialize CloudWatch client: %s", e)
-    sys.exit(1)
 
 
 # FSxNへの接続
