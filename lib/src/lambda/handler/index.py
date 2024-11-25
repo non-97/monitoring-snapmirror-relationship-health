@@ -28,7 +28,7 @@ except (ClientError, BotoCoreError) as e:
 
 
 # FSxNへの接続
-@tracer.capture_method
+@tracer.capture_method(capture_response=False)
 def get_ontap_connection() -> HostConnection:
     try:
         password = parameters.get_parameter(
