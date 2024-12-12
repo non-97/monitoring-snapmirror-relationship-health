@@ -22,8 +22,8 @@ export class SchedulerConstruct extends BaseConstruct {
       : undefined;
     const role = new cdk.aws_iam.Role(this, "Role", {
       assumedBy: new cdk.aws_iam.ServicePrincipal("scheduler.amazonaws.com"),
-      managedPolicies: [
-        new cdk.aws_iam.ManagedPolicy(this, "InvokeFunction", {
+      inlinePolicies: {
+        InvokeFunction: new cdk.aws_iam.PolicyDocument({
           statements: [
             new cdk.aws_iam.PolicyStatement({
               effect: cdk.aws_iam.Effect.ALLOW,
@@ -32,7 +32,7 @@ export class SchedulerConstruct extends BaseConstruct {
             }),
           ],
         }),
-      ],
+      },
       roleName,
     });
     if (roleName) {

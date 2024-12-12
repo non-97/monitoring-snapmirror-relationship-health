@@ -45,12 +45,17 @@ export class LambdaConstruct extends BaseConstruct {
           "monitoring-snapmirror-health-lambda"
         )
       : undefined;
-    const policy = new cdk.aws_iam.ManagedPolicy(
+    const policy = new cdk.aws_iam.Policy(
       this,
       "MonitoringSnapMirrorRelationshipHealthPolicy",
       {
-        managedPolicyName: policyName,
+        policyName,
         statements: [
+          new cdk.aws_iam.PolicyStatement({
+            effect: cdk.aws_iam.Effect.ALLOW,
+            resources: ["*"],
+            actions: ["xray:PutTelemetryRecords", "xray:PutTraceSegments"],
+          }),
           new cdk.aws_iam.PolicyStatement({
             effect: cdk.aws_iam.Effect.ALLOW,
             resources: [
@@ -93,13 +98,10 @@ export class LambdaConstruct extends BaseConstruct {
         cdk.aws_iam.ManagedPolicy.fromAwsManagedPolicyName(
           "service-role/AWSLambdaVPCAccessExecutionRole"
         ),
-        cdk.aws_iam.ManagedPolicy.fromAwsManagedPolicyName(
-          "AWSXrayWriteOnlyAccess"
-        ),
-        policy,
       ],
       roleName,
     });
+    role.attachInlinePolicy(policy);
     if (roleName) {
       cdk.Tags.of(role).add("Name", roleName);
     }
@@ -173,6 +175,8 @@ export class LambdaConstruct extends BaseConstruct {
     if (functionName) {
       cdk.Tags.of(lambdaFunction).add("Name", functionName);
     }
+
+    role.node.tryRemoveChild("DefaultPolicy");
 
     this.lambdaFunction = lambdaFunction;
   }
