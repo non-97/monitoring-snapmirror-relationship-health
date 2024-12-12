@@ -23,6 +23,16 @@ export interface SchedulerProperty {
   scheduleExpression: string;
 }
 
+export interface MonitoringProperty {
+  destinations: {
+    svmName: string;
+    svmUuid: string;
+  }[];
+  service: string;
+  topicArn: string;
+  enableOkAction?: boolean;
+}
+
 export interface SystemProperty {
   systemName: string;
   envName: string;
@@ -39,6 +49,7 @@ export interface MonitoringSnapMirrorRelationshipHealthProperty {
   vpcEndpointProperty?: VpcEndpointProperty;
   lambdaProperty: LambdaProperty;
   schedulerProperty?: SchedulerProperty;
+  monitoringProperty?: MonitoringProperty;
 }
 
 export interface MonitoringSnapMirrorRelationshipHealthStackProperty {

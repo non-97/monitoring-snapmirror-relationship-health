@@ -4,6 +4,7 @@ import { MonitoringSnapMirrorRelationshipHealthProperty } from "../parameter/ind
 import { VpcEndpointConstruct } from "./construct/vpc-endpoint-construct";
 import { LambdaConstruct } from "./construct/lambda-construct";
 import { SchedulerConstruct } from "./construct/scheduler-construct";
+import { MonitoringConstruct } from "./construct/monitoring-construct";
 
 export interface MonitoringSnapMirrorRelationshipHealthStackProps
   extends cdk.StackProps,
@@ -37,6 +38,13 @@ export class MonitoringSnapMirrorRelationshipHealthStack extends cdk.Stack {
         systemProperty: props.systemProperty,
         targetFunction: lambdaConstruct.lambdaFunction,
         ...props.schedulerProperty,
+      });
+    }
+
+    if (props.monitoringProperty) {
+      new MonitoringConstruct(this, "MonitoringConstruct", {
+        systemProperty: props.systemProperty,
+        ...props.monitoringProperty,
       });
     }
   }
