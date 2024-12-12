@@ -11,7 +11,7 @@ export const monitoringConfig: MonitoringProperty = {
       svmUuid: "2bb6c4fc-a554-11ef-accd-b31c82a68aa5",
     },
   ],
-  service: "monitoring-snapmirror-relationship-health",
+  service: "monitoring-snapmirror-health",
   topicArn:
     "arn:aws:sns:us-east-1:<123456789012>:non-97-dev-stack-fsxn-resources-MonitoringConstructTopic9E0A8832-D2LGQAtrknkW",
   enableOkAction: true,
