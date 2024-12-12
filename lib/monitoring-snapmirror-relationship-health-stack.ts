@@ -19,23 +19,22 @@ export class MonitoringSnapMirrorRelationshipHealthStack extends cdk.Stack {
 
     // VPC Endpoint
     if (props.vpcEndpointProperty) {
-      new VpcEndpointConstruct(
-        this,
-        "VpcEndpointConstruct",
-        props.vpcEndpointProperty
-      );
+      new VpcEndpointConstruct(this, "VpcEndpointConstruct", {
+        systemProperty: props.systemProperty,
+        ...props.vpcEndpointProperty,
+      });
     }
 
     // Lambda
-    const lambdaConstruct = new LambdaConstruct(
-      this,
-      "LambdaConstruct",
-      props.lambdaProperty
-    );
+    const lambdaConstruct = new LambdaConstruct(this, "LambdaConstruct", {
+      systemProperty: props.systemProperty,
+      ...props.lambdaProperty,
+    });
 
     // EventBridge Scheduler
     if (props.schedulerProperty) {
       new SchedulerConstruct(this, "SchedulerConstruct", {
+        systemProperty: props.systemProperty,
         targetFunction: lambdaConstruct.lambdaFunction,
         ...props.schedulerProperty,
       });

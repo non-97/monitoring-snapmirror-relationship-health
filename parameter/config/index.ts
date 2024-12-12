@@ -1,7 +1,9 @@
 import { MonitoringSnapMirrorRelationshipHealthStackProperty } from "../types";
+import { systemConfig } from "./system-config";
 import { vpcEndpointConfig } from "./vpc-endpoint-config";
 import { lambdaConfig } from "./lambda-config";
 import { schedulerConfig } from "./scheduler-config";
+import { tagsConfig } from "./tags-config";
 
 export const monitoringSnapMirrorRelationshipHealthStackProperty: MonitoringSnapMirrorRelationshipHealthStackProperty =
   {
@@ -10,10 +12,12 @@ export const monitoringSnapMirrorRelationshipHealthStackProperty: MonitoringSnap
       region: process.env.CDK_DEFAULT_REGION,
     },
     props: {
+      systemProperty: systemConfig,
       vpcEndpointProperty: vpcEndpointConfig,
       lambdaProperty: lambdaConfig,
       schedulerProperty: schedulerConfig,
     },
+    tags: tagsConfig,
   };
 
 export { vpcEndpointConfig, lambdaConfig, schedulerConfig as scheduleConfig };

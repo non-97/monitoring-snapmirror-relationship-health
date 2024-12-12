@@ -23,7 +23,19 @@ export interface SchedulerProperty {
   scheduleExpression: string;
 }
 
+export interface SystemProperty {
+  systemName: string;
+  envName: string;
+}
+
+export interface TagProperty {
+  key: string;
+
+  value: string;
+}
+
 export interface MonitoringSnapMirrorRelationshipHealthProperty {
+  systemProperty?: SystemProperty;
   vpcEndpointProperty?: VpcEndpointProperty;
   lambdaProperty: LambdaProperty;
   schedulerProperty?: SchedulerProperty;
@@ -32,4 +44,5 @@ export interface MonitoringSnapMirrorRelationshipHealthProperty {
 export interface MonitoringSnapMirrorRelationshipHealthStackProperty {
   env?: cdk.Environment;
   props: MonitoringSnapMirrorRelationshipHealthProperty;
+  tags?: TagProperty[];
 }

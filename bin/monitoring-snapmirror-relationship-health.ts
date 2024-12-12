@@ -5,7 +5,7 @@ import { MonitoringSnapMirrorRelationshipHealthStack } from "../lib/monitoring-s
 import { monitoringSnapMirrorRelationshipHealthStackProperty } from "../parameter/index";
 
 const app = new cdk.App();
-new MonitoringSnapMirrorRelationshipHealthStack(
+const stack = new MonitoringSnapMirrorRelationshipHealthStack(
   app,
   "MonitoringSnapmirrorRelationshipHealthStack",
   {
@@ -13,3 +13,7 @@ new MonitoringSnapMirrorRelationshipHealthStack(
     ...monitoringSnapMirrorRelationshipHealthStackProperty.props,
   }
 );
+
+monitoringSnapMirrorRelationshipHealthStackProperty.tags?.forEach((tag) => {
+  cdk.Tags.of(stack).add(tag.key, tag.value);
+});
