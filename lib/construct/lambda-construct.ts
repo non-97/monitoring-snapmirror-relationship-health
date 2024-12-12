@@ -164,7 +164,7 @@ export class LambdaConstruct extends BaseConstruct {
         POWERTOOLS_LOG_LEVEL: props.powertoolsLogLevel || "INFO",
         POWERTOOLS_SERVICE_NAME: "monitoring-snapmirror-relationship-health",
         POWERTOOLS_METRICS_NAMESPACE: "ONTAP/SnapMirror",
-        POWERTOOLS_PARAMETERS_MAX_AGE: "500",
+        POWERTOOLS_PARAMETERS_MAX_AGE: "300",
         FSXN_DNS_NAME: props.fsxnDnsName,
         FSXN_USER_NAME: props.fsxnUserName,
         FSXN_USER_CREDENTIAL_SSM_PARAMETER_STORE_NAME:
