@@ -17,6 +17,7 @@ const stack = new MonitoringSnapMirrorRelationshipHealthStack(
     stackName,
     env: monitoringSnapMirrorRelationshipHealthStackProperty.env,
     ...monitoringSnapMirrorRelationshipHealthStackProperty.props,
+    terminationProtection: true,
   }
 );
 
