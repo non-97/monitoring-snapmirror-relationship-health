@@ -4,6 +4,7 @@ import { MonitoringSnapMirrorRelationshipHealthProperty } from "../parameter/ind
 import { VpcEndpointConstruct } from "./construct/vpc-endpoint-construct";
 import { LambdaConstruct } from "./construct/lambda-construct";
 import { SchedulerConstruct } from "./construct/scheduler-construct";
+import { MonitoringConstruct } from "./construct/monitoring-construct";
 
 export interface MonitoringSnapMirrorRelationshipHealthStackProps
   extends cdk.StackProps,
@@ -19,25 +20,31 @@ export class MonitoringSnapMirrorRelationshipHealthStack extends cdk.Stack {
 
     // VPC Endpoint
     if (props.vpcEndpointProperty) {
-      new VpcEndpointConstruct(
-        this,
-        "VpcEndpointConstruct",
-        props.vpcEndpointProperty
-      );
+      new VpcEndpointConstruct(this, "VpcEndpointConstruct", {
+        systemProperty: props.systemProperty,
+        ...props.vpcEndpointProperty,
+      });
     }
 
     // Lambda
-    const lambdaConstruct = new LambdaConstruct(
-      this,
-      "LambdaConstruct",
-      props.lambdaProperty
-    );
+    const lambdaConstruct = new LambdaConstruct(this, "LambdaConstruct", {
+      systemProperty: props.systemProperty,
+      ...props.lambdaProperty,
+    });
 
     // EventBridge Scheduler
     if (props.schedulerProperty) {
       new SchedulerConstruct(this, "SchedulerConstruct", {
+        systemProperty: props.systemProperty,
         targetFunction: lambdaConstruct.lambdaFunction,
         ...props.schedulerProperty,
+      });
+    }
+
+    if (props.monitoringProperty) {
+      new MonitoringConstruct(this, "MonitoringConstruct", {
+        systemProperty: props.systemProperty,
+        ...props.monitoringProperty,
       });
     }
   }

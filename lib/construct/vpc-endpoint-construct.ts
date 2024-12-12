@@ -1,12 +1,15 @@
 import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
+import { BaseConstructProps, BaseConstruct } from "./base-construct";
 import { VpcEndpointProperty } from "../../parameter";
 
-export interface VpcEndpointConstructProps extends VpcEndpointProperty {}
+export interface VpcEndpointConstructProps
+  extends VpcEndpointProperty,
+    BaseConstructProps {}
 
-export class VpcEndpointConstruct extends Construct {
+export class VpcEndpointConstruct extends BaseConstruct {
   constructor(scope: Construct, id: string, props: VpcEndpointConstructProps) {
-    super(scope, id);
+    super(scope, id, props);
 
     // VPC
     const vpc = cdk.aws_ec2.Vpc.fromLookup(this, "Vpc", {
