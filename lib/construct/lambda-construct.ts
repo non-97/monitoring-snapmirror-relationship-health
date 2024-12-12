@@ -155,7 +155,7 @@ export class LambdaConstruct extends BaseConstruct {
       architecture: cdk.aws_lambda.Architecture.ARM_64,
       timeout: cdk.Duration.seconds(20),
       tracing: cdk.aws_lambda.Tracing.ACTIVE,
-      logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH,
+      logRetention: cdk.aws_logs.RetentionDays.ONE_YEAR,
       loggingFormat: cdk.aws_lambda.LoggingFormat.JSON,
       applicationLogLevelV2: props.functionApplicationLogLevel,
       systemLogLevelV2: props.functionSystemLogLevel,
