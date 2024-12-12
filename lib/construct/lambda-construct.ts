@@ -93,9 +93,6 @@ export class LambdaConstruct extends BaseConstruct {
       assumedBy: new cdk.aws_iam.ServicePrincipal("lambda.amazonaws.com"),
       managedPolicies: [
         cdk.aws_iam.ManagedPolicy.fromAwsManagedPolicyName(
-          "service-role/AWSLambdaBasicExecutionRole"
-        ),
-        cdk.aws_iam.ManagedPolicy.fromAwsManagedPolicyName(
           "service-role/AWSLambdaVPCAccessExecutionRole"
         ),
       ],
