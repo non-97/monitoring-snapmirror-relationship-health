@@ -17,7 +17,7 @@ export class SchedulerConstruct extends BaseConstruct {
     const roleName = props.systemProperty
       ? this.generateResourceName(
           "role",
-          "monitoring-snapmirror-health-scheduler"
+          "monitoring-snapmirror-health-schedule"
         )
       : undefined;
     const role = new cdk.aws_iam.Role(this, "Role", {
@@ -57,10 +57,7 @@ export class SchedulerConstruct extends BaseConstruct {
 
     // EventBridge Scheduler
     const scheduleName = props.systemProperty
-      ? this.generateResourceName(
-          "schedule-group",
-          "monitoring-snapmirror-health"
-        )
+      ? this.generateResourceName("schedule", "monitoring-snapmirror-health")
       : "MonitoringSnapmirrorHealthSchedule";
     const schedule = new cdk.aws_scheduler.CfnSchedule(this, "Default", {
       flexibleTimeWindow: {
