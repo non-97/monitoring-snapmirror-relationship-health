@@ -62,11 +62,6 @@ export class LambdaConstruct extends BaseConstruct {
             ],
             actions: ["ssm:GetParameter"],
           }),
-          new cdk.aws_iam.PolicyStatement({
-            effect: cdk.aws_iam.Effect.ALLOW,
-            resources: ["*"],
-            actions: ["cloudwatch:PutMetricData"],
-          }),
         ],
       }
     );
